@@ -76,31 +76,33 @@ app.post('/emergency', (req, res) => {
 // WEBSOCKETS (Broadcast & Connection)
 // GESTION DES WEBSOCKETS
 io.on('connection', (socket) => {
-    console.log('Connecté au socket:', socket.id);
+    console.log('🔌 Un utilisateur est connecté :', socket.id);
 
-    // 1. Un livreur rejoint sa chambre personnelle
+    // 1. Le livreur s'enregistre (ex: ID "5")
     socket.on('join_room', (userId) => {
         const roomName = "user_" + userId;
         socket.join(roomName);
-        console.log(`Livreur ID ${userId} a rejoint la chambre : ${roomName}`);
+        console.log(`🏠 LIVREUR ENREGISTRÉ : ID ${userId} est dans la room ${roomName}`);
     });
 
-    // 2. Message pour TOUT LE MONDE
+    // 2. Message GLOBAL (Contrôleur -> Tout le monde)
     socket.on('send_broadcast', (msg) => {
-        console.log('Message global:', msg);
+        console.log('📢 DIFFUSION GLOBALE :', msg);
         io.emit('receive_broadcast', msg);
     });
 
-    // 3. Message pour UN livreur spécifique
+    // 3. Message PRIVÉ (Contrôleur -> Un livreur précis)
     socket.on('send_private', (data) => {
-        // data doit contenir { targetId: "5", message: "Bonjour" }
+        // data doit être { targetId: "5", message: "Texte" }
         const roomName = "user_" + data.targetId;
-        console.log(`Message privé pour ${roomName}:`, data.message);
+        console.log(`📩 PRIVÉ pour ${roomName} :`, data.message);
+        
+        // On envoie UNIQUEMENT à cette room
         io.to(roomName).emit('receive_private', data.message);
     });
 
     socket.on('disconnect', () => {
-        console.log('Utilisateur déconnecté');
+        console.log('❌ Déconnexion');
     });
 });
 
