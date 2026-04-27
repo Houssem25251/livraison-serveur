@@ -80,9 +80,11 @@ io.on('connection', (socket) => {
 
     // 1. Le livreur s'enregistre (ex: ID "5")
     socket.on('join_room', (userId) => {
-        const roomName = "user_" + userId;
+        // Force la conversion en String et enlève les espaces
+        const cleanId = String(userId).trim(); 
+        const roomName = "user_" + cleanId;
         socket.join(roomName);
-        console.log(`🏠 LIVREUR ENREGISTRÉ : ID ${userId} est dans la room ${roomName}`);
+        console.log(`🏠 ROOM JOINTE : ${roomName}`);
     });
 
     // 2. Message GLOBAL (Contrôleur -> Tout le monde)
@@ -93,11 +95,11 @@ io.on('connection', (socket) => {
 
     // 3. Message PRIVÉ (Contrôleur -> Un livreur précis)
     socket.on('send_private', (data) => {
-        // data doit être { targetId: "5", message: "Texte" }
-        const roomName = "user_" + data.targetId;
-        console.log(`📩 PRIVÉ pour ${roomName} :`, data.message);
+        // data.targetId doit être traité comme une String propre
+        const cleanTargetId = String(data.targetId).trim();
+        const roomName = "user_" + cleanTargetId;
+        console.log(`📩 TENTATIVE D'ENVOI PRIVÉ : Vers ${roomName} | Message: ${data.message}`);
         
-        // On envoie UNIQUEMENT à cette room
         io.to(roomName).emit('receive_private', data.message);
     });
 
