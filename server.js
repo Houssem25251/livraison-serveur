@@ -20,7 +20,7 @@ app.post('/login', async (req, res) => {
     const { login, password } = req.body;
     try {
         const result = await db.query(
-            'SELECT idpers, nompers, codeposte AS role FROM Personnel WHERE Login = $1 AND motP = $2', 
+            'SELECT idpers, nompers, codeposte AS role FROM Personnel WHERE Login = $1 AND motP = $2',
             [login, password]
         );
         if (result.rows.length > 0) res.json({ success: true, user: result.rows[0] });
@@ -28,14 +28,13 @@ app.post('/login', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// 2. FETCH ALL DELIVERIES (For Boss Dashboard & Controller)
-// FIXED: Now selects ALL columns so the "Card" shows details
+// 2. FETCH ALL DELIVERIES
 app.get('/all-deliveries', async (req, res) => {
     try {
         const result = await db.query('SELECT nocde, dateliv, livreur_id, modepay, etatliv, remarque, nomclt, villeclt, telclt FROM LivraisonCom');
         res.json(result.rows);
-    } catch (err) { 
-        res.status(500).json({ error: err.message }); 
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -44,7 +43,6 @@ app.post('/update-delivery', async (req, res) => {
     const { nocde, status, remarque } = req.body;
     try {
         await db.query('UPDATE LivraisonCom SET etatliv = $1, remarque = $2 WHERE nocde = $3', [status, remarque, nocde]);
-        // Notify all apps (Dashboard & Controller) to refresh
         io.emit('status_changed', { nocde, status });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
@@ -73,38 +71,54 @@ app.post('/emergency', (req, res) => {
     res.json({ success: true });
 });
 
-// WEBSOCKETS (Broadcast & Connection)
-// GESTION DES WEBSOCKETS
+// WEBSOCKETS
 io.on('connection', (socket) => {
     console.log('🔌 Un utilisateur est connecté :', socket.id);
 
-    // 1. Le livreur s'enregistre (ex: ID "5")
+    // Le livreur rejoint sa room
     socket.on('join_room', (userId) => {
-        // Force la conversion en String et enlève les espaces
-        const cleanId = String(userId).trim(); 
+        const cleanId = String(userId).trim();
         const roomName = "user_" + cleanId;
         socket.join(roomName);
-        console.log(`🏠 ROOM JOINTE : ${roomName}`);
+        console.log(`🏠 ROOM JOINTE : ${roomName} | socket: ${socket.id}`);
     });
 
-    // 2. Message GLOBAL (Contrôleur -> Tout le monde)
+    // Message GLOBAL (Contrôleur -> Tout le monde)
     socket.on('send_broadcast', (msg) => {
         console.log('📢 DIFFUSION GLOBALE :', msg);
         io.emit('receive_broadcast', msg);
     });
 
-    // 3. Message PRIVÉ (Contrôleur -> Un livreur précis)
-    socket.on('send_private', (data) => {
-        // data.targetId doit être traité comme une String propre
-        const cleanTargetId = String(data.targetId).trim();
-        const roomName = "user_" + cleanTargetId;
-        console.log(`📩 TENTATIVE D'ENVOI PRIVÉ : Vers ${roomName} | Message: ${data.message}`);
-        
-        io.to(roomName).emit('receive_private', data.message);
+    // ✅ FIX: Message PRIVÉ — parse rawData car Android envoie une String JSON
+    socket.on('send_private', (rawData) => {
+        try {
+            // Android socket.io envoie un JSONObject.toString() = String JSON
+            // On parse si c'est une string, sinon on utilise directement
+            const data = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+
+            const cleanTargetId = String(data.targetId).trim();
+            const roomName = "user_" + cleanTargetId;
+
+            console.log(`📩 ENVOI PRIVÉ → Room: [${roomName}] | Message: [${data.message}]`);
+            console.log(`   RAW reçu: ${JSON.stringify(rawData)} (type: ${typeof rawData})`);
+
+            // Vérifier si la room a des membres
+            const room = io.sockets.adapter.rooms.get(roomName);
+            if (!room || room.size === 0) {
+                console.warn(`⚠️  Room [${roomName}] est VIDE ou inexistante ! Le livreur est-il connecté ?`);
+            } else {
+                console.log(`✅ Room [${roomName}] a ${room.size} membre(s) connecté(s)`);
+            }
+
+            io.to(roomName).emit('receive_private', data.message);
+
+        } catch (e) {
+            console.error('❌ Erreur parsing send_private:', e.message, '| rawData:', rawData);
+        }
     });
 
     socket.on('disconnect', () => {
-        console.log('❌ Déconnexion');
+        console.log('❌ Déconnexion :', socket.id);
     });
 });
 
