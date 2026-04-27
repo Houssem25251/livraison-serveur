@@ -74,16 +74,34 @@ app.post('/emergency', (req, res) => {
 });
 
 // WEBSOCKETS (Broadcast & Connection)
+// GESTION DES WEBSOCKETS
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log('Connecté au socket:', socket.id);
 
-    // Boss sends a message to all drivers
-    socket.on('broadcast_message', (msg) => {
-        console.log('📢 Broadcasting:', msg);
-        io.emit('broadcast_message', msg);
+    // 1. Un livreur rejoint sa chambre personnelle
+    socket.on('join_room', (userId) => {
+        const roomName = "user_" + userId;
+        socket.join(roomName);
+        console.log(`Livreur ID ${userId} a rejoint la chambre : ${roomName}`);
     });
 
-    socket.on('disconnect', () => console.log('User disconnected'));
+    // 2. Message pour TOUT LE MONDE
+    socket.on('send_broadcast', (msg) => {
+        console.log('Message global:', msg);
+        io.emit('receive_broadcast', msg);
+    });
+
+    // 3. Message pour UN livreur spécifique
+    socket.on('send_private', (data) => {
+        // data doit contenir { targetId: "5", message: "Bonjour" }
+        const roomName = "user_" + data.targetId;
+        console.log(`Message privé pour ${roomName}:`, data.message);
+        io.to(roomName).emit('receive_private', data.message);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Utilisateur déconnecté');
+    });
 });
 
 const PORT = process.env.PORT || 3000;
